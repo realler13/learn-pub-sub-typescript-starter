@@ -1,4 +1,7 @@
 import amqp from "amqplib";
+import type { PlayingState } from "../internal/gamelogic/gamestate.js";
+import { publishJSON } from "../internal/pubsub/publish.js";
+import { ExchangePerilDirect, PauseKey } from "../internal/routing/routing.js";
 
 async function main() {
   console.log("Starting Peril server...");
@@ -6,6 +9,10 @@ async function main() {
   const rabbitConnString = "amqp://guest:guest@localhost:5672/";
   const conn = await amqp.connect(rabbitConnString);
   console.log("Connected to RabbitMQ successfully.");
+  const ch = await conn.createConfirmChannel();
+  ch.on("error", (err) => {
+    console.error("RabbitMQ channel error:", err);
+  });
 
   async function shutdown() {
     console.log("Shutting down Peril server...");
@@ -20,6 +27,10 @@ async function main() {
 
   process.once("SIGINT", shutdown);
   process.once("SIGTERM", shutdown);
+
+  const playingState: PlayingState = { isPaused: true };
+  await publishJSON(ch, ExchangePerilDirect, PauseKey, playingState);
+  console.log("Published paused state successfully.");
 }
 
 main().catch((err) => {
