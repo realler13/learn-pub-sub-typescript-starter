@@ -56,10 +56,12 @@ export function handlerMove(
 
 export function handlerWar(
   gs: GameState,
+  publishGameLog: (username: string, message: string) => Promise<void>,
 ): (rw: RecognitionOfWar) => Promise<AckType> {
   return async (rw: RecognitionOfWar) => {
     const outcome = handleWar(gs, rw);
-    let ackType: AckType;
+    let ackType = AckType.NackDiscard;
+    let message: string | undefined;
     switch (outcome.result) {
       case WarOutcome.NotInvolved:
         ackType = AckType.NackRequeue;
@@ -69,12 +71,23 @@ export function handlerWar(
         break;
       case WarOutcome.OpponentWon:
       case WarOutcome.YouWon:
+        message = `${outcome.winner} won a war against ${outcome.loser}`;
+        break;
       case WarOutcome.Draw:
-        ackType = AckType.Ack;
+        message = `A war between ${outcome.attacker} and ${outcome.defender} resulted in a draw`;
         break;
       default:
         console.error("Unknown war outcome:", outcome);
         ackType = AckType.NackDiscard;
+    }
+    if (message !== undefined) {
+      try {
+        await publishGameLog(rw.attacker.username, message);
+        ackType = AckType.Ack;
+      } catch (err) {
+        console.error("Failed to publish game log:", err);
+        ackType = AckType.NackRequeue;
+      }
     }
     process.stdout.write("> ");
     return ackType;

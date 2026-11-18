@@ -57,15 +57,12 @@ export async function subscribeJSON<T>(
       const ackType = await handler(data);
       switch (ackType) {
         case AckType.Ack:
-          console.log(`Ack: ${queue.queue}`);
           ch.ack(message);
           break;
         case AckType.NackRequeue:
-          console.log(`NackRequeue: ${queue.queue}`);
           ch.nack(message, false, true);
           break;
         case AckType.NackDiscard:
-          console.log(`NackDiscard: ${queue.queue}`);
           ch.nack(message, false, false);
           break;
       }
