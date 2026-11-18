@@ -13,8 +13,14 @@ import {
   subscribeJSON,
   SimpleQueueType,
 } from "../internal/pubsub/consume.js";
-import { ExchangePerilDirect, PauseKey } from "../internal/routing/routing.js";
-import { handlerPause } from "./handlers.js";
+import { publishJSON } from "../internal/pubsub/publish.js";
+import {
+  ArmyMovesPrefix,
+  ExchangePerilDirect,
+  ExchangePerilTopic,
+  PauseKey,
+} from "../internal/routing/routing.js";
+import { handlerMove, handlerPause } from "./handlers.js";
 
 async function main() {
   console.log("Starting Peril client...");
@@ -22,6 +28,10 @@ async function main() {
   const rabbitConnString = "amqp://guest:guest@localhost:5672/";
   const conn = await amqp.connect(rabbitConnString);
   console.log("Connected to RabbitMQ successfully.");
+  const ch = await conn.createConfirmChannel();
+  ch.on("error", (err) => {
+    console.error("RabbitMQ channel error:", err);
+  });
 
   async function shutdown() {
     console.log("Shutting down Peril client...");
@@ -48,6 +58,15 @@ async function main() {
     handlerPause(gs),
   );
   console.log(`Subscribed to queue ${PauseKey}.${username}.`);
+  await subscribeJSON(
+    conn,
+    ExchangePerilTopic,
+    `${ArmyMovesPrefix}.${username}`,
+    `${ArmyMovesPrefix}.*`,
+    SimpleQueueType.Transient,
+    handlerMove(gs),
+  );
+  console.log(`Subscribed to queue ${ArmyMovesPrefix}.${username}.`);
 
   while (true) {
     const words = await getInput();
@@ -65,9 +84,17 @@ async function main() {
         case "spawn":
           commandSpawn(gs, words);
           break;
-        case "move":
-          commandMove(gs, words);
+        case "move": {
+          const move = commandMove(gs, words);
+          await publishJSON(
+            ch,
+            ExchangePerilTopic,
+            `${ArmyMovesPrefix}.${username}`,
+            move,
+          );
+          console.log("Move published successfully.");
           break;
+        }
         case "status":
           await commandStatus(gs);
           break;
