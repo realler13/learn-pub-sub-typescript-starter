@@ -1,8 +1,15 @@
 import type { Channel, ChannelModel, ConsumeMessage, Replies } from "amqplib";
+import { ExchangePerilDeadLetter } from "../routing/routing.js";
 
 export enum SimpleQueueType {
   Durable,
   Transient,
+}
+
+export enum AckType {
+  Ack,
+  NackRequeue,
+  NackDiscard,
 }
 
 export async function declareAndBind(
@@ -17,6 +24,9 @@ export async function declareAndBind(
     durable: queueType === SimpleQueueType.Durable,
     autoDelete: queueType === SimpleQueueType.Transient,
     exclusive: queueType === SimpleQueueType.Transient,
+    arguments: {
+      "x-dead-letter-exchange": ExchangePerilDeadLetter,
+    },
   });
   await ch.bindQueue(queue.queue, exchange, key);
   return [ch, queue];
@@ -28,7 +38,7 @@ export async function subscribeJSON<T>(
   queueName: string,
   key: string,
   queueType: SimpleQueueType,
-  handler: (data: T) => void,
+  handler: (data: T) => AckType,
 ): Promise<void> {
   const [ch, queue] = await declareAndBind(
     conn,
@@ -44,8 +54,21 @@ export async function subscribeJSON<T>(
         return;
       }
       const data: T = JSON.parse(message.content.toString());
-      handler(data);
-      ch.ack(message);
+      const ackType = handler(data);
+      switch (ackType) {
+        case AckType.Ack:
+          console.log(`Ack: ${queue.queue}`);
+          ch.ack(message);
+          break;
+        case AckType.NackRequeue:
+          console.log(`NackRequeue: ${queue.queue}`);
+          ch.nack(message, false, true);
+          break;
+        case AckType.NackDiscard:
+          console.log(`NackDiscard: ${queue.queue}`);
+          ch.nack(message, false, false);
+          break;
+      }
     },
     { noAck: false },
   );
