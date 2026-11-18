@@ -10,10 +10,11 @@ import { GameState } from "../internal/gamelogic/gamestate.js";
 import { commandMove } from "../internal/gamelogic/move.js";
 import { commandSpawn } from "../internal/gamelogic/spawn.js";
 import {
-  declareAndBind,
+  subscribeJSON,
   SimpleQueueType,
 } from "../internal/pubsub/consume.js";
 import { ExchangePerilDirect, PauseKey } from "../internal/routing/routing.js";
+import { handlerPause } from "./handlers.js";
 
 async function main() {
   console.log("Starting Peril client...");
@@ -37,15 +38,16 @@ async function main() {
   process.once("SIGTERM", shutdown);
 
   const username = await clientWelcome();
-  const [, queue] = await declareAndBind(
+  const gs = new GameState(username);
+  await subscribeJSON(
     conn,
     ExchangePerilDirect,
     `${PauseKey}.${username}`,
     PauseKey,
     SimpleQueueType.Transient,
+    handlerPause(gs),
   );
-  console.log(`Declared and bound queue ${queue.queue}.`);
-  const gs = new GameState(username);
+  console.log(`Subscribed to queue ${PauseKey}.${username}.`);
 
   while (true) {
     const words = await getInput();
