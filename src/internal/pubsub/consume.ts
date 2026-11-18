@@ -38,7 +38,7 @@ export async function subscribeJSON<T>(
   queueName: string,
   key: string,
   queueType: SimpleQueueType,
-  handler: (data: T) => AckType,
+  handler: (data: T) => Promise<AckType> | AckType,
 ): Promise<void> {
   const [ch, queue] = await declareAndBind(
     conn,
@@ -49,12 +49,12 @@ export async function subscribeJSON<T>(
   );
   await ch.consume(
     queue.queue,
-    (message: ConsumeMessage | null) => {
+    async (message: ConsumeMessage | null) => {
       if (message === null) {
         return;
       }
       const data: T = JSON.parse(message.content.toString());
-      const ackType = handler(data);
+      const ackType = await handler(data);
       switch (ackType) {
         case AckType.Ack:
           console.log(`Ack: ${queue.queue}`);

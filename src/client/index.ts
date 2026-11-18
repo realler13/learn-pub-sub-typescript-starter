@@ -19,8 +19,9 @@ import {
   ExchangePerilDirect,
   ExchangePerilTopic,
   PauseKey,
+  WarRecognitionsPrefix,
 } from "../internal/routing/routing.js";
-import { handlerMove, handlerPause } from "./handlers.js";
+import { handlerMove, handlerPause, handlerWar } from "./handlers.js";
 
 async function main() {
   console.log("Starting Peril client...");
@@ -64,9 +65,18 @@ async function main() {
     `${ArmyMovesPrefix}.${username}`,
     `${ArmyMovesPrefix}.*`,
     SimpleQueueType.Transient,
-    handlerMove(gs),
+    handlerMove(gs, ch),
   );
   console.log(`Subscribed to queue ${ArmyMovesPrefix}.${username}.`);
+  await subscribeJSON(
+    conn,
+    ExchangePerilTopic,
+    WarRecognitionsPrefix,
+    `${WarRecognitionsPrefix}.*`,
+    SimpleQueueType.Durable,
+    handlerWar(gs),
+  );
+  console.log(`Subscribed to shared queue ${WarRecognitionsPrefix}.`);
 
   while (true) {
     const words = await getInput();
