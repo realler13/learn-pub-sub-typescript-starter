@@ -1,4 +1,8 @@
 import amqp from "amqplib";
+import {
+  getInput,
+  printServerHelp,
+} from "../internal/gamelogic/gamelogic.js";
 import type { PlayingState } from "../internal/gamelogic/gamestate.js";
 import { publishJSON } from "../internal/pubsub/publish.js";
 import { ExchangePerilDirect, PauseKey } from "../internal/routing/routing.js";
@@ -28,9 +32,26 @@ async function main() {
   process.once("SIGINT", shutdown);
   process.once("SIGTERM", shutdown);
 
-  const playingState: PlayingState = { isPaused: true };
-  await publishJSON(ch, ExchangePerilDirect, PauseKey, playingState);
-  console.log("Published paused state successfully.");
+  printServerHelp();
+  while (true) {
+    const words = await getInput();
+    const command = words[0];
+    if (!command) {
+      continue;
+    }
+
+    if (command === "pause" || command === "resume") {
+      console.log(`Sending ${command} message...`);
+      const playingState: PlayingState = { isPaused: command === "pause" };
+      await publishJSON(ch, ExchangePerilDirect, PauseKey, playingState);
+    } else if (command === "quit") {
+      console.log("Exiting Peril server...");
+      break;
+    } else {
+      console.log(`Unknown command: ${command}`);
+    }
+  }
+  await shutdown();
 }
 
 main().catch((err) => {
