@@ -1,3 +1,4 @@
+import { decode } from "@msgpack/msgpack";
 import type { Channel, ChannelModel, ConsumeMessage, Replies } from "amqplib";
 import { ExchangePerilDeadLetter } from "../routing/routing.js";
 
@@ -32,13 +33,14 @@ export async function declareAndBind(
   return [ch, queue];
 }
 
-export async function subscribeJSON<T>(
+export async function subscribe<T>(
   conn: ChannelModel,
   exchange: string,
   queueName: string,
   key: string,
   queueType: SimpleQueueType,
   handler: (data: T) => Promise<AckType> | AckType,
+  deserializer: (data: Buffer) => T,
 ): Promise<void> {
   const [ch, queue] = await declareAndBind(
     conn,
@@ -53,7 +55,7 @@ export async function subscribeJSON<T>(
       if (message === null) {
         return;
       }
-      const data: T = JSON.parse(message.content.toString());
+      const data = deserializer(message.content);
       const ackType = await handler(data);
       switch (ackType) {
         case AckType.Ack:
@@ -68,5 +70,43 @@ export async function subscribeJSON<T>(
       }
     },
     { noAck: false },
+  );
+}
+
+export async function subscribeJSON<T>(
+  conn: ChannelModel,
+  exchange: string,
+  queueName: string,
+  key: string,
+  queueType: SimpleQueueType,
+  handler: (data: T) => Promise<AckType> | AckType,
+): Promise<void> {
+  await subscribe(
+    conn,
+    exchange,
+    queueName,
+    key,
+    queueType,
+    handler,
+    (data) => JSON.parse(data.toString()) as T,
+  );
+}
+
+export async function subscribeMsgPack<T>(
+  conn: ChannelModel,
+  exchange: string,
+  queueName: string,
+  key: string,
+  queueType: SimpleQueueType,
+  handler: (data: T) => Promise<AckType> | AckType,
+): Promise<void> {
+  await subscribe(
+    conn,
+    exchange,
+    queueName,
+    key,
+    queueType,
+    handler,
+    (data) => decode(data) as T,
   );
 }

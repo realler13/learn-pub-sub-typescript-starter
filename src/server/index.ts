@@ -4,9 +4,11 @@ import {
   printServerHelp,
 } from "../internal/gamelogic/gamelogic.js";
 import type { PlayingState } from "../internal/gamelogic/gamestate.js";
+import { writeLog, type GameLog } from "../internal/gamelogic/logs.js";
 import {
-  declareAndBind,
+  AckType,
   SimpleQueueType,
+  subscribeMsgPack,
 } from "../internal/pubsub/consume.js";
 import { publishJSON } from "../internal/pubsub/publish.js";
 import {
@@ -41,14 +43,25 @@ async function main() {
   process.once("SIGINT", shutdown);
   process.once("SIGTERM", shutdown);
 
-  const [, logQueue] = await declareAndBind(
+  await subscribeMsgPack(
     conn,
     ExchangePerilTopic,
     GameLogSlug,
     `${GameLogSlug}.*`,
     SimpleQueueType.Durable,
+    async (gameLog: GameLog) => {
+      try {
+        await writeLog(gameLog);
+        return AckType.Ack;
+      } catch (err) {
+        console.error("Failed to write game log:", err);
+        return AckType.NackRequeue;
+      } finally {
+        process.stdout.write("> ");
+      }
+    },
   );
-  console.log(`Declared and bound queue ${logQueue.queue}.`);
+  console.log(`Subscribed to queue ${GameLogSlug}.`);
 
   printServerHelp();
   while (true) {
