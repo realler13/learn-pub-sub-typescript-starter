@@ -36,13 +36,18 @@ export function handlerMove(
         attacker: move.player,
         defender: gs.getPlayerSnap(),
       };
-      await publishJSON(
-        ch,
-        ExchangePerilTopic,
-        `${WarRecognitionsPrefix}.${gs.getUsername()}`,
-        rw,
-      );
-      ackType = AckType.NackRequeue;
+      try {
+        await publishJSON(
+          ch,
+          ExchangePerilTopic,
+          `${WarRecognitionsPrefix}.${gs.getUsername()}`,
+          rw,
+        );
+        ackType = AckType.Ack;
+      } catch (err) {
+        console.error("Failed to publish war declaration:", err);
+        ackType = AckType.NackRequeue;
+      }
     }
     process.stdout.write("> ");
     return ackType;
