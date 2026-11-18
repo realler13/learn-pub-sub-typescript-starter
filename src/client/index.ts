@@ -1,5 +1,14 @@
 import amqp from "amqplib";
-import { clientWelcome } from "../internal/gamelogic/gamelogic.js";
+import {
+  clientWelcome,
+  commandStatus,
+  getInput,
+  printClientHelp,
+  printQuit,
+} from "../internal/gamelogic/gamelogic.js";
+import { GameState } from "../internal/gamelogic/gamestate.js";
+import { commandMove } from "../internal/gamelogic/move.js";
+import { commandSpawn } from "../internal/gamelogic/spawn.js";
 import {
   declareAndBind,
   SimpleQueueType,
@@ -36,6 +45,48 @@ async function main() {
     SimpleQueueType.Transient,
   );
   console.log(`Declared and bound queue ${queue.queue}.`);
+  const gs = new GameState(username);
+
+  while (true) {
+    const words = await getInput();
+    const command = words[0];
+    if (!command) {
+      continue;
+    }
+    if (command === "quit") {
+      printQuit();
+      break;
+    }
+
+    try {
+      switch (command) {
+        case "spawn":
+          commandSpawn(gs, words);
+          break;
+        case "move":
+          commandMove(gs, words);
+          break;
+        case "status":
+          await commandStatus(gs);
+          break;
+        case "help":
+          printClientHelp();
+          break;
+        case "spam":
+          console.log("Spamming not allowed yet!");
+          break;
+        default:
+          console.error(`Unknown command: ${command}`);
+      }
+    } catch (err) {
+      if (err instanceof Error) {
+        console.error(err.message);
+      } else {
+        throw err;
+      }
+    }
+  }
+  await shutdown();
 }
 
 main().catch((err) => {
