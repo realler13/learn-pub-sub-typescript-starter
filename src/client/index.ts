@@ -3,6 +3,7 @@ import {
   clientWelcome,
   commandStatus,
   getInput,
+  getMaliciousLog,
   printClientHelp,
   printQuit,
 } from "../internal/gamelogic/gamelogic.js";
@@ -132,9 +133,25 @@ async function main() {
         case "help":
           printClientHelp();
           break;
-        case "spam":
-          console.log("Spamming not allowed yet!");
+        case "spam": {
+          const countWord = words[1];
+          if (!countWord) {
+            console.error("Usage: spam <count>");
+            break;
+          }
+          const count = Number(countWord);
+          if (!Number.isSafeInteger(count) || count <= 0) {
+            console.error("Spam count must be a positive integer.");
+            break;
+          }
+          const publications: Promise<void>[] = [];
+          for (let i = 0; i < count; i++) {
+            publications.push(publishGameLog(ch, username, getMaliciousLog()));
+          }
+          await Promise.all(publications);
+          console.log(`Published ${count} game logs.`);
           break;
+        }
         default:
           console.error(`Unknown command: ${command}`);
       }
